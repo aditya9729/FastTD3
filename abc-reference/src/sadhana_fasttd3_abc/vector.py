@@ -17,7 +17,7 @@ class VectorRemoteEnv(RemoteEnv):
 
     def __init__(self, endpoint: Endpoint, *, device: Any, profile: str = "training128"):
         super().__init__(endpoint, device=device, seed=200000)
-        count = {"training128": 128, "cpu_acceptance2": 2}.get(profile)
+        count = {"training128": 128, "scratch_training128": 128, "cpu_acceptance2": 2}.get(profile)
         if count is None or self.description.get("profile") != profile:
             raise ValueError("ABC vector host has a different declared profile")
         if (self.num_envs, self.num_obs, self.num_actions, self.max_episode_steps) != (
@@ -145,9 +145,32 @@ def qualified_args(*, steps: int = 64, device: str = "cuda"):
     )
 
 
-def remote_factory(socket_path: str, *, timeout: float):
+def training_args(*, steps: int = 4000, device: str = "cuda"):
+    """An explicit bounded scratch phase, with every learner default preserved."""
+    if type(steps) is not int or steps != 4000 or device not in {"cpu", "cuda"}:
+        raise ValueError("The first scratch phase requires exactly4000 vector steps")
+    from fast_td3.hyperparams import BaseArgs
+
+    return BaseArgs(
+        env_name="ABC-FiveBottlesVector-v1",
+        exp_name="FastTD3ScratchTraining128",
+        seed=1,
+        cuda=device == "cuda",
+        num_envs=128,
+        num_eval_envs=1,
+        total_timesteps=steps,
+        use_wandb=False,
+        eval_interval=0,
+        render_interval=0,
+        save_interval=0,
+    )
+
+
+def remote_factory(socket_path: str, *, timeout: float, profile: str = "training128"):
     def create(args, device):
-        env = VectorRemoteEnv(Endpoint(socket_path, timeout=timeout, schema=SCHEMA), device=device)
+        env = VectorRemoteEnv(
+            Endpoint(socket_path, timeout=timeout, schema=SCHEMA), device=device, profile=profile
+        )
         # Evaluation is disabled in this training qualification. Captured VAL
         # support waits for the independently published reset/camera API.
         return env, env, env
@@ -160,15 +183,21 @@ def main() -> None:
     parser.add_argument("--socket", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=64)
+    parser.add_argument("--phase", choices=("qualification", "training"), default="qualification")
     parser.add_argument("--device", choices=("cpu", "cuda"), required=True)
     parser.add_argument("--rpc-timeout", type=int, default=180)
     options = parser.parse_args()
     os.environ["WANDB_MODE"] = "disabled"
     from .learner import train
 
+    scratch = options.phase == "training"
     train(
-        qualified_args(steps=options.steps, device=options.device),
-        remote_factory(options.socket, timeout=options.rpc_timeout),
+        (training_args if scratch else qualified_args)(steps=options.steps, device=options.device),
+        remote_factory(
+            options.socket,
+            timeout=options.rpc_timeout,
+            profile="scratch_training128" if scratch else "training128",
+        ),
         options.output,
     )
 
