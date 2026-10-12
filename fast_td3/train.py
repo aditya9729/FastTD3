@@ -50,7 +50,7 @@ except ImportError:
     pass
 
 
-def main(*, args=None, env_factory=None, observer=None):
+def main(*, args=None, env_factory=None, observer=None, environment_type="abc"):
     # Sadhana boundary: an explicit environment factory leaves author updates intact.
     args = get_args() if args is None else args
     print(args)
@@ -91,7 +91,9 @@ def main(*, args=None, env_factory=None, observer=None):
     print(f"Using device: {device}")
 
     if env_factory is not None:
-        env_type = "abc"
+        if environment_type not in {"abc", "humanoid_bench"}:
+            raise ValueError("Unsupported explicit environment factory type")
+        env_type = environment_type
         envs, eval_envs, render_env = env_factory(args, device)
     elif args.env_name.startswith("h1hand-") or args.env_name.startswith("h1-"):
         from .environments.humanoid_bench_env import HumanoidBenchEnv

@@ -13,11 +13,31 @@
     "update_pol": "0542e3d80c2ba655a93c1bdfb0a9b26a7cc1e15306064b32e102cfd983faadc0",
     "soft_update": "471059da2bf3e0aebde9523a29c2e32c15ec945b613b8fd89cd5e3d2ef9945c9"
   },
-  "train_boundary_patch_sha256": "8eb673d8103ac9d4517936174a0cea3eab57e6faae405909e907fd52f062b3ec",
+  "train_boundary_patch_sha256": "6cffbbb14d57ac00d3bef920dc32c68338fb64cf4212a83aa5b150c5fd6135cb",
   "files": [
     {
       "path": "fast_td3/__init__.py",
       "sha256": "b0e56c18cfd14f919d47a714cd82e775e594c9e476de7c3bc6b153bf1c485962",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/environments/humanoid_bench_env.py",
+      "sha256": "60c638fba56b66601d16cee3e4e857f2576be0872d911b4523df09d3e15caea3",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/environments/isaaclab_env.py",
+      "sha256": "fddaa841da8918b2b8ebd88ff312504970e0fdbae2143f2afe4985bef6b3f79f",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/environments/mtbench_env.py",
+      "sha256": "528645c47393229601a65f49851e1aad18d0b2e4ce75b595c4112f10943ff065",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/environments/mujoco_playground_env.py",
+      "sha256": "093ee156e01d6350a1bf2667b16fd108a0f4b514d306e33c989162d451f19ff4",
       "upstream_unchanged": true
     },
     {
@@ -47,7 +67,7 @@
     },
     {
       "path": "fast_td3/train.py",
-      "sha256": "c082be83d614c74230e558e30af2bfdb2bb0b780a03ad8ab53e63dcf94998c60",
+      "sha256": "5d60f3aaffd40453c253753c9213e20299a5f485f53e48ea8fb2cb73cc5cdfae",
       "upstream_unchanged": false
     },
     {
@@ -67,5 +87,10 @@
     "TorchAudio",
     "media packages"
   ],
-  "native_benchmark_status": "pending_root_admission"
+  "native_benchmark_status": "pending_root_admission",
+  "explicit_environment_factory_types": [
+    "abc",
+    "humanoid_bench"
+  ],
+  "humanoidbench_profile_owner": "Normally installed sadhana_fasttd3_hb stage owns exact h1hand-stand-v0 / 128 worlds / 64 vector steps admission; native learner qualification remains pending."
 }

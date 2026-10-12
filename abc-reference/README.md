@@ -10,6 +10,13 @@ optimizers and update function bodies are preserved. `fast_td3/train.py` changes
 package imports and adds explicit arguments, an environment factory and a
 read-only observer. The observer records real update counts and finite samples.
 
+Adapter `0.1.5` seals all 12 original Python files, including the four environment
+wrappers. Packaging now includes those wrapper files without changing their bytes.
+The explicit factory type accepts `abc` or `humanoid_bench`. The separate
+`sadhana_fasttd3_hb` stage admits only the reviewed H1 Stand 128-world, 64-step
+qualification. That GPU qualification remains pending. Its native CPU host uses
+a separate runtime; this learner runtime does not install HumanoidBench or JAX.
+
 Use the separate Python 3.10 / Torch 2.6.0+cu124 runtime.
 Install the normal FastTD3 and adapter wheels. Optional upstream simulator
 backends, JAX, Isaac, TorchRL, Gymnasium and media/tracking clients are not used.

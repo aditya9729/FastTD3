@@ -1,0 +1,18 @@
+flowchart LR
+  Original["FastTD3 author 229ed59b\nOriginal learner, replay and normalization\n11 other Python files unchanged"]
+  Wheels["Normal release wheels\nFast 0.1.0 with all 12 original Python files\nABC adapter 0.1.5 with exact source seal"]
+  Gate["Installed CPU admission verified\nExact train source and runtime metadata\nStale source refused before native workers"]
+  Types["Explicit factory boundary\nabc or humanoid_bench\nOriginal update ASTs unchanged"]
+  ABC["Existing ABC condition\nPrivileged state from scratch\nHistorical one-world diagnostic"]
+  HB["Separate HB stage 0.1.1\nH1 Stand / 128 worlds / 64 vector steps\nProfile and cleanup guards CPU tested"]
+  CPU["Separate original HB CPU host\nTwo-world native smoke verified\nTorch 2.3.1+cpu / MuJoCo 3.1.6"]
+  Root["Root owns release and canonical GPU lease\nIndependent review owns source acceptance"]
+  Pending["128-world native learner run PENDING\n8192 transitions / 106 critic / 53 actor updates\nCapacity and convergence not verified"]
+  Original -->|source data| Wheels
+  Wheels -->|installed payload proof| Gate
+  Gate -->|accepted explicit caller| Types
+  Types -->|declared ABC condition| ABC
+  Types -->|declared HB condition| HB
+  HB -.->|pending original native environment data| Pending
+  CPU -.->|pending 128-world socket data| Pending
+  Root -.->|pending release and launch control| Pending

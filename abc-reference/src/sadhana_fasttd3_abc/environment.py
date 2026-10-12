@@ -15,17 +15,19 @@ MAX_FRAME_BYTES = 4 * 1024**2
 class Endpoint:
     """One connection per request. State remains in the task-owned host."""
 
-    def __init__(self, path: str | Path, *, timeout: float = 60.0) -> None:
+    def __init__(self, path: str | Path, *, timeout: float = 60.0, schema: str = SCHEMA) -> None:
         if type(timeout) not in (int, float) or not 0 < timeout <= 600:
             raise ValueError("RPC timeout must be positive and at most 600 seconds")
-        self.path, self.timeout, self.request_id = str(path), timeout, 0
+        if schema not in (SCHEMA, "sadhana.fasttd3.abc.vector.v1"):
+            raise ValueError("Unsupported FastTD3 ABC RPC schema")
+        self.path, self.timeout, self.request_id, self.schema = str(path), timeout, 0, schema
 
     def call(self, operation: str, **payload: Any) -> dict[str, Any]:
         deadline = time.monotonic() + self.timeout
         self.request_id += 1
         body = (
             json.dumps(
-                {"schema": SCHEMA, "id": self.request_id, "operation": operation, **payload},
+                {"schema": self.schema, "id": self.request_id, "operation": operation, **payload},
                 allow_nan=False,
                 separators=(",", ":"),
             ).encode()
@@ -59,7 +61,7 @@ class Endpoint:
                         raise ValueError("ABC host must send one JSON frame per connection")
                     break
         response = json.loads(frame)
-        if not isinstance(response, dict) or response.get("schema") != SCHEMA:
+        if not isinstance(response, dict) or response.get("schema") != self.schema:
             raise ValueError("ABC host response has an incompatible schema")
         if response.get("id") != self.request_id:
             raise ValueError("ABC host response request identity differs")
@@ -162,6 +164,7 @@ class RemoteEnv:
                 "time_outs": truncated,
                 "observations": {"raw": {"obs": terminal}},
                 "episodes": episodes,
+                "autoresets": result.get("autoresets", []),
             },
         )
 
