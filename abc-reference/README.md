@@ -41,7 +41,11 @@ world. `--compile` and `--amp` are explicit. Compilation stays off by default.
 
 Training and frozen evaluation use separate commands. Evaluation uses the
 original deterministic actor and frozen observation normalization. It checks
-policy state before and after evaluation. Missing or incomplete episode
+policy state and policy RNG before and after evaluation. It uses the saved
+`amp`, `cuda` and `amp_dtype` settings with the author's evaluation autocast.
+The receipt records the actual autocast profile, parameter/action dtypes and
+original `high` float32 matrix multiplication precision. Original actions are
+converted to float32 before simulator dispatch. Missing or incomplete episode
 evidence fails evaluation; it does not become a zero score.
 
 The original checkpoint exports actor, critics, normalizers and arguments.

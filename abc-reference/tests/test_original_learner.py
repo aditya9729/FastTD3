@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import asdict
 from pathlib import Path
+from unittest.mock import patch
 
 import torch
 from fast_td3.fast_td3 import Actor, Critic
@@ -71,6 +73,96 @@ class SyntheticEnv:
 
 
 class OriginalLearnerTests(unittest.TestCase):
+    def test_checkpoint_amp_matches_author_context_and_keeps_rng_frozen(self):
+        # Explicit CPU fixture: fake CUDA availability routes the author's context
+        # to real CPU autocast. No CUDA device or native simulator is initialized.
+        class RecordingEnv(SyntheticEnv):
+            def __init__(self):
+                super().__init__(1)
+                self.applied = []
+
+            def reset(self, *, seeds=None):
+                self.current_obs = super().reset(seeds=seeds)
+                return self.current_obs
+
+            def step(self, actions):
+                with torch.no_grad(), real_autocast(
+                    "cpu", dtype=expected_dtype, enabled=expected_enabled
+                ):
+                    expected = original_forward(
+                        actor, normalizer(self.current_obs, update=False)
+                    ).float()
+                torch.testing.assert_close(actions, expected, rtol=0, atol=0)
+                self.applied.append(actions.clone())
+                result = super().step(actions)
+                self.current_obs = result[0]
+                return result
+
+        real_autocast = torch.amp.autocast
+        for amp, cuda, expected_enabled, amp_dtype in (
+            (True, True, True, "bf16"),
+            (True, True, True, "fp16"),
+            (False, True, False, "bf16"),
+            (True, False, False, "bf16"),
+        ):
+            with self.subTest(amp=amp, cuda=cuda, amp_dtype=amp_dtype):
+                args = BaseArgs(
+                    num_envs=1, actor_hidden_dim=32, amp=amp, cuda=cuda,
+                    amp_dtype=amp_dtype, obs_normalization=True, torch_deterministic=True,
+                )
+                actor = Actor(20, 14, 1, args.init_scale, 32, device=torch.device("cpu"))
+                normalizer = EmpiricalNormalization(20, "cpu")
+                normalizer(torch.arange(40, dtype=torch.float32).reshape(2, 20))
+                normalizer.eval()
+                expected_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
+                context_calls, actor_dtypes = [], []
+                original_forward = Actor.forward
+
+                def cpu_context(*, device_type, dtype, enabled):
+                    context_calls.append((device_type, dtype, enabled))
+                    return real_autocast("cpu", dtype=dtype, enabled=enabled)
+
+                def observed_forward(model, obs):
+                    self.assertEqual(torch.is_autocast_enabled("cpu"), expected_enabled)
+                    self.assertFalse(torch.is_grad_enabled())
+                    result = original_forward(model, obs)
+                    actor_dtypes.append(result.dtype)
+                    return result
+
+                with tempfile.TemporaryDirectory() as directory:
+                    checkpoint = Path(directory) / "policy.pt"
+                    torch.save({
+                        "args": asdict(args), "actor_state_dict": actor.state_dict(),
+                        "obs_normalizer_state": normalizer.state_dict(),
+                    }, checkpoint)
+                    before = torch.random.get_rng_state().clone()
+                    env = RecordingEnv()
+                    with (
+                        patch("torch.cuda.is_available", return_value=True),
+                        patch("torch.amp.autocast", side_effect=cpu_context),
+                        patch.object(Actor, "forward", observed_forward),
+                    ):
+                        receipt = evaluate(checkpoint, env, [9030], Path(directory) / "eval")
+                    self.assertTrue(torch.equal(before, torch.random.get_rng_state()))
+                    dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
+                    self.assertEqual(context_calls, [
+                        ("cuda" if cuda else "cpu", dtype, expected_enabled)
+                    ] * 5)
+                    self.assertEqual(
+                        actor_dtypes, [dtype if expected_enabled else torch.float32] * 5
+                    )
+                    self.assertTrue(all(action.dtype == torch.float32 for action in env.applied))
+                    self.assertEqual(receipt["policy_state_before"], receipt["policy_state_after"])
+                    self.assertEqual(receipt["rng_state_before"], receipt["rng_state_after"])
+                    precision = receipt["evaluation_precision"]
+                    self.assertEqual(precision["autocast_enabled"], expected_enabled)
+                    self.assertEqual(precision["policy_action_dtype"], [str(actor_dtypes[0])])
+                    self.assertEqual(precision["policy_parameter_dtype"], ["torch.float32"])
+                    self.assertEqual(precision["environment_action_dtype"], "torch.float32")
+                    self.assertEqual(precision["float32_matmul_precision"], "high")
+                    self.assertTrue(precision["cudnn_deterministic"])
+                    self.assertEqual((receipt["actor_updates"], receipt["critic_updates"]), (0, 0))
+
     def test_terminal_distribution_projection_clamps_and_conserves_mass(self):
         critic = Critic(4, 2, 5, 0.0, 4.0, 32, "", 64, 8, device=torch.device("cpu"))
         rewards = torch.tensor([0.0, 1.0, 2.0, 4.0, 10.0, -10.0])

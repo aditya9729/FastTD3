@@ -204,10 +204,11 @@ def remote_factory(socket_path: str, *, seed: int = 9030):
 
 
 def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict[str, Any]:
-    """Deterministic original actor; model and normalizer tensors stay unchanged."""
+    """Original evaluation autocast; policy, normalization and RNG stay unchanged."""
     import torch
     from fast_td3.fast_td3 import Actor
     from fast_td3.fast_td3_utils import EmpiricalNormalization
+    from torch.amp import autocast
 
     source = verify_source()
     if env.num_envs != 1 or not seeds or len(set(seeds)) != len(seeds):
@@ -218,16 +219,45 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
     args = payload["args"]
     if args["agent"] != "fasttd3" or args.get("sim_type"):
         raise ValueError("Checkpoint is not original FastTD3")
-    actor = Actor(
-        n_obs=env.num_obs,
-        n_act=env.num_actions,
-        num_envs=args["num_envs"],
-        init_scale=args["init_scale"],
-        hidden_dim=args["actor_hidden_dim"],
-        std_min=args["std_min"],
-        std_max=args["std_max"],
-        device=env.device,
+    # Match train.main's precision setup and nested evaluate autocast exactly.
+    amp_enabled = args["amp"] and args["cuda"] and torch.cuda.is_available()
+    amp_device_type = (
+        "cuda"
+        if args["cuda"] and torch.cuda.is_available()
+        else "mps" if args["cuda"] and torch.backends.mps.is_available() else "cpu"
     )
+    amp_dtype = torch.bfloat16 if args["amp_dtype"] == "bf16" else torch.float16
+    torch.set_float32_matmul_precision("high")
+    torch.backends.cudnn.deterministic = args["torch_deterministic"]
+
+    def rng_state():
+        states = {"torch_cpu": torch.random.get_rng_state()}
+        if env.device.type == "cuda":
+            states["torch_policy_device"] = torch.cuda.get_rng_state(env.device)
+        return {
+            name: hashlib.sha256(state.cpu().numpy().tobytes()).hexdigest()
+            for name, state in states.items()
+        }
+
+    rng_before = rng_state()
+    # Construction draws unused random initial weights/noise buffers before loading.
+    # Keep those draws separate from the caller's deterministic evaluation stream.
+    devices = (
+        [env.device.index if env.device.index is not None else torch.cuda.current_device()]
+        if env.device.type == "cuda"
+        else []
+    )
+    with torch.random.fork_rng(devices=devices):
+        actor = Actor(
+            n_obs=env.num_obs,
+            n_act=env.num_actions,
+            num_envs=args["num_envs"],
+            init_scale=args["init_scale"],
+            hidden_dim=args["actor_hidden_dim"],
+            std_min=args["std_min"],
+            std_max=args["std_max"],
+            device=env.device,
+        )
     actor.load_state_dict(payload["actor_state_dict"])
     actor.eval()
     if args["obs_normalization"]:
@@ -245,13 +275,17 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
     frozen = state_digest(actor, normalizer)
     start = time.monotonic()
     records = []
+    action_dtypes = set()
     for seed in seeds:
         obs = env.reset(seeds=[seed])
         reward_sum, final = 0.0, None
         for control in range(1, env.max_episode_steps + 1):
-            with torch.no_grad():
+            with torch.no_grad(), autocast(
+                device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
+            ):
                 normalized = normalizer(obs, update=False) if args["obs_normalization"] else obs
                 actions = actor(normalized)
+            action_dtypes.add(str(actions.dtype))
             obs, rewards, dones, infos = env.step(actions.float())
             reward_sum += float(rewards[0].cpu())
             if bool(dones[0]):
@@ -272,6 +306,9 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
     after = state_digest(actor, normalizer)
     if frozen != after:
         raise RuntimeError("Frozen evaluation mutated actor or observation normalization")
+    rng_after = rng_state()
+    if rng_before != rng_after:
+        raise RuntimeError("Frozen evaluation mutated the policy RNG state")
     receipt = {
         "schema_version": 1,
         "condition": "original_fasttd3_scratch_privileged_state_abc",
@@ -284,6 +321,23 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
         "critic_updates": 0,
         "policy_state_before": frozen,
         "policy_state_after": after,
+        "rng_state_before": rng_before,
+        "rng_state_after": rng_after,
+        "evaluation_precision": {
+            "autocast_enabled": bool(amp_enabled),
+            "autocast_device_type": amp_device_type,
+            "configured_amp": args["amp"],
+            "configured_cuda": args["cuda"],
+            "amp_dtype": args["amp_dtype"],
+            "autocast_dtype": str(amp_dtype),
+            "policy_parameter_dtype": sorted({str(p.dtype) for p in actor.parameters()}),
+            "policy_action_dtype": sorted(action_dtypes),
+            "environment_action_dtype": "torch.float32",
+            "float32_matmul_precision": torch.get_float32_matmul_precision(),
+            "cuda_matmul_allow_tf32": torch.backends.cuda.matmul.allow_tf32,
+            "cudnn_deterministic": torch.backends.cudnn.deterministic,
+            "cudnn_allow_tf32": torch.backends.cudnn.allow_tf32,
+        },
         "environment": env.description,
         "seconds": time.monotonic() - start,
         "source": source,
