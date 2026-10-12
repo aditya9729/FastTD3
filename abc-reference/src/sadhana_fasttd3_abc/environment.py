@@ -18,7 +18,11 @@ class Endpoint:
     def __init__(self, path: str | Path, *, timeout: float = 60.0, schema: str = SCHEMA) -> None:
         if type(timeout) not in (int, float) or not 0 < timeout <= 600:
             raise ValueError("RPC timeout must be positive and at most 600 seconds")
-        if schema not in (SCHEMA, "sadhana.fasttd3.abc.vector.v1"):
+        if schema not in (
+            SCHEMA,
+            "sadhana.fasttd3.abc.vector.v1",
+            "sadhana.fasttd3.abc.captured.v1",
+        ):
             raise ValueError("Unsupported FastTD3 ABC RPC schema")
         self.path, self.timeout, self.request_id, self.schema = str(path), timeout, 0, schema
 

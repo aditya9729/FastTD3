@@ -47,6 +47,75 @@ class ExplicitEndpointFixture:
 
 
 class RemoteBoundaryTests(unittest.TestCase):
+    def test_captured_consumer_uses_actual_unix_endpoint(self):
+        from sadhana_fasttd3_abc.captured import SCHEMA as captured_schema
+        from sadhana_fasttd3_abc.captured import CapturedRemoteEnv
+
+        description = {
+            "num_envs": 1,
+            "num_obs": 216,
+            "num_actions": 14,
+            "max_episode_steps": 3540,
+            "privileged_state": True,
+            "profile": "captured_validation",
+            "autoreset": False,
+            "action_profile": "normalized14_affine_clip_v1",
+            "reset_policy": {
+                "reset_verified": True,
+                "profile": "captured_demonstration_mjb_integration_v1",
+                "heldout_seed": 9100,
+                "allowed_seeds": [9100],
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "captured.sock"
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.settimeout(2)
+            server.bind(str(path))
+            server.listen(1)
+            failures, operations = [], []
+
+            def handle():
+                try:
+                    with server:
+                        for _ in range(2):
+                            connection, _ = server.accept()
+                            with connection:
+                                connection.settimeout(2)
+                                request = json.loads(connection.recv(4096))
+                                self.assertEqual(request["schema"], captured_schema)
+                                operations.append(request["operation"])
+                                if request["operation"] == "describe":
+                                    result = description
+                                else:
+                                    self.assertEqual(request["operation"], "reset")
+                                    self.assertEqual(request["seeds"], [9100])
+                                    result = {"actual_seeds": [9100], "obs": [[0.0] * 216]}
+                                response = {
+                                    "schema": captured_schema,
+                                    "id": request["id"],
+                                    "ok": True,
+                                    "result": result,
+                                }
+                                connection.sendall(json.dumps(response).encode() + b"\n")
+                except Exception as error:
+                    failures.append(error)
+
+            thread = threading.Thread(target=handle, daemon=True)
+            thread.start()
+            try:
+                env = CapturedRemoteEnv(
+                    Endpoint(path, timeout=2, schema=captured_schema), device="cpu"
+                )
+                self.assertEqual(tuple(env.reset(seeds=[9100]).shape), (1, 216))
+                env.close()
+            finally:
+                thread.join(timeout=3)
+                server.close()
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(failures, [])
+            self.assertEqual(operations, ["describe", "reset"])
+
     def test_actual_unix_slow_response_cannot_extend_total_deadline(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "slow.sock"
