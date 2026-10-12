@@ -1,0 +1,25 @@
+[project]
+name = "fasttd3-author-abc-runtime"
+version = "0.1.0"
+requires-python = "==3.10.*"
+dependencies = [
+  "numpy==1.26.4",
+  "tensordict==0.7.2",
+  "torch==2.6.0+cu124",
+  "tqdm",
+  "tyro",
+  "wandb",
+  "setuptools>=69",
+  "wheel",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true

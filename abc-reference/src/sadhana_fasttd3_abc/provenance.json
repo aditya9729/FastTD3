@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "upstream_commit": "229ed59bbf43ea2f7a2d5d90d1076314839944d7",
+  "upstream_repository": "https://github.com/younggyoseo/FastTD3.git",
+  "condition": "original_fasttd3_scratch_privileged_state_abc",
+  "unchanged_upstream_tracked_files": 24,
+  "modified_upstream_files": [
+    "fast_td3/train.py"
+  ],
+  "protected_update_functions": {
+    "evaluate": "b295f6042f90a86607ddaf76dba616a7e2e21d44e983e7d883418c8d130249e5",
+    "update_main": "3568ad69d81990cb545e0293891f3734f2e00c8506ab3b3e723fce4f7b1e1b1b",
+    "update_pol": "0542e3d80c2ba655a93c1bdfb0a9b26a7cc1e15306064b32e102cfd983faadc0",
+    "soft_update": "471059da2bf3e0aebde9523a29c2e32c15ec945b613b8fd89cd5e3d2ef9945c9"
+  },
+  "train_boundary_patch_sha256": "8eb673d8103ac9d4517936174a0cea3eab57e6faae405909e907fd52f062b3ec",
+  "files": [
+    {
+      "path": "fast_td3/__init__.py",
+      "sha256": "b0e56c18cfd14f919d47a714cd82e775e594c9e476de7c3bc6b153bf1c485962",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/fast_td3.py",
+      "sha256": "795262977bd7dfe20a1950874cbe6ae45e59ef8cad7419eaaaf666905bc018c4",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/fast_td3_deploy.py",
+      "sha256": "890054905b3a0cf1c5d294397ddee28c4a9f65662006334e3fac20949f5f05bf",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/fast_td3_simbav2.py",
+      "sha256": "d26bfe9dfe32282f97e40d2330e25ff0c988c528d66e3e61324170207035b025",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/fast_td3_utils.py",
+      "sha256": "f57fd9597215d912127adeafd141568b2f0ec0cce23dda42c5cd47401130b56e",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/hyperparams.py",
+      "sha256": "c884ac7d0e47374ef4de13736f61f6a5c8a3a47f415fcaa12894579df4e81356",
+      "upstream_unchanged": true
+    },
+    {
+      "path": "fast_td3/train.py",
+      "sha256": "c082be83d614c74230e558e30af2bfdb2bb0b780a03ad8ab53e63dcf94998c60",
+      "upstream_unchanged": false
+    },
+    {
+      "path": "fast_td3/train_multigpu.py",
+      "sha256": "978986f7b57a5ad6938f8db39b1b58a6449b5e232c255f58d244502437f64659",
+      "upstream_unchanged": true
+    }
+  ],
+  "omitted_optional_dependencies": [
+    "HumanoidBench",
+    "MuJoCo Playground",
+    "JAX",
+    "IsaacLab",
+    "Gymnasium",
+    "TorchRL",
+    "TorchVision",
+    "TorchAudio",
+    "media packages"
+  ],
+  "native_benchmark_status": "pending_root_admission"
+}

@@ -32,7 +32,7 @@ from torch.amp import autocast, GradScaler
 
 from tensordict import TensorDict
 
-from fast_td3_utils import (
+from .fast_td3_utils import (
     EmpiricalNormalization,
     RewardNormalizer,
     PerTaskRewardNormalizer,
@@ -40,7 +40,7 @@ from fast_td3_utils import (
     save_params,
     mark_step,
 )
-from hyperparams import get_args
+from .hyperparams import get_args
 
 torch.set_float32_matmul_precision("high")
 
@@ -50,8 +50,9 @@ except ImportError:
     pass
 
 
-def main():
-    args = get_args()
+def main(*, args=None, env_factory=None, observer=None):
+    # Sadhana boundary: an explicit environment factory leaves author updates intact.
+    args = get_args() if args is None else args
     print(args)
     run_name = f"{args.env_name}__{args.exp_name}__{args.seed}"
 
@@ -89,8 +90,11 @@ def main():
             raise ValueError("No GPU available")
     print(f"Using device: {device}")
 
-    if args.env_name.startswith("h1hand-") or args.env_name.startswith("h1-"):
-        from environments.humanoid_bench_env import HumanoidBenchEnv
+    if env_factory is not None:
+        env_type = "abc"
+        envs, eval_envs, render_env = env_factory(args, device)
+    elif args.env_name.startswith("h1hand-") or args.env_name.startswith("h1-"):
+        from .environments.humanoid_bench_env import HumanoidBenchEnv
 
         env_type = "humanoid_bench"
         envs = HumanoidBenchEnv(args.env_name, args.num_envs, device=device)
@@ -99,7 +103,7 @@ def main():
             args.env_name, 1, render_mode="rgb_array", device=device
         )
     elif args.env_name.startswith("Isaac-"):
-        from environments.isaaclab_env import IsaacLabEnv
+        from .environments.isaaclab_env import IsaacLabEnv
 
         env_type = "isaaclab"
         envs = IsaacLabEnv(
@@ -112,7 +116,7 @@ def main():
         eval_envs = envs
         render_env = envs
     elif args.env_name.startswith("MTBench-"):
-        from environments.mtbench_env import MTBenchEnv
+        from .environments.mtbench_env import MTBenchEnv
 
         env_name = "-".join(args.env_name.split("-")[1:])
         env_type = "mtbench"
@@ -120,7 +124,7 @@ def main():
         eval_envs = envs
         render_env = envs
     else:
-        from environments.mujoco_playground_env import make_env
+        from .environments.mujoco_playground_env import make_env
 
         # TODO: Check if re-using same envs for eval could reduce memory usage
         env_type = "mujoco_playground"
@@ -203,12 +207,12 @@ def main():
 
     if args.agent == "fasttd3":
         if env_type in ["mtbench"]:
-            from fast_td3 import MultiTaskActor, MultiTaskCritic
+            from .fast_td3 import MultiTaskActor, MultiTaskCritic
 
             actor_cls = MultiTaskActor
             critic_cls = MultiTaskCritic
         else:
-            from fast_td3 import Actor, Critic
+            from .fast_td3 import Actor, Critic
 
             actor_cls = Actor
             critic_cls = Critic
@@ -234,12 +238,12 @@ def main():
             raise ValueError("SimNorm options are only supported with agent='fasttd3'")
 
         if env_type in ["mtbench"]:
-            from fast_td3_simbav2 import MultiTaskActor, MultiTaskCritic
+            from .fast_td3_simbav2 import MultiTaskActor, MultiTaskCritic
 
             actor_cls = MultiTaskActor
             critic_cls = MultiTaskCritic
         else:
-            from fast_td3_simbav2 import Actor, Critic
+            from .fast_td3_simbav2 import Actor, Critic
 
             actor_cls = Actor
             critic_cls = Critic
@@ -666,12 +670,18 @@ def main():
                     data["next"]["rewards"] = normalize_reward(raw_rewards)
 
                 logs_dict = update_main(data, logs_dict)
+                if observer is not None:
+                    observer("critic", qnet, logs_dict)
                 if args.num_updates > 1:
                     if i % args.policy_frequency == 1:
                         logs_dict = update_pol(data, logs_dict)
+                        if observer is not None:
+                            observer("actor", actor, logs_dict)
                 else:
                     if global_step % args.policy_frequency == 0:
                         logs_dict = update_pol(data, logs_dict)
+                        if observer is not None:
+                            observer("actor", actor, logs_dict)
 
                 soft_update(qnet, qnet_target, args.tau)
 

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "condition": "original_fasttd3_scratch_privileged_state_abc",
+  "task": "put_plastic_bottles_in_bin",
+  "bottle_count": 5,
+  "training": {
+    "seed": 1,
+    "layout_seed": 9030,
+    "vector_calls": 1000,
+    "num_envs": 1,
+    "batch_size": 32768,
+    "buffer_size_per_env": 51200,
+    "compile": false,
+    "amp": true,
+    "device": "cuda"
+  },
+  "evaluation": {
+    "seeds": [20260511, 20260512, 20260513],
+    "num_envs": 1,
+    "max_controls_per_episode": 1000,
+    "actor": "deterministic_original_actor",
+    "normalization_updates": false
+  },
+  "limits": {
+    "smoke_vector_calls": 16,
+    "smoke_wall_seconds": 120,
+    "training_wall_seconds": 1800,
+    "evaluation_wall_seconds": 600,
+    "root_measures_cost_before_expansion": true
+  },
+  "known_recipe_changes": [
+    "Original ABC sequential CPU MuJoCo task with privileged physical scene state.",
+    "One world instead of 128 HumanoidBench worlds; this is a diagnostic adaptation.",
+    "Finite 1000-vector-call budget instead of full task-specific author training.",
+    "Compile disabled using the author-supported option.",
+    "External tracking, in-loop evaluation and rendering disabled; separate frozen evaluation."
+  ]
+}

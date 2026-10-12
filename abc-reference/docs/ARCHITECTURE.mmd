@@ -1,0 +1,33 @@
+flowchart LR
+  subgraph ABC[ABC owns simulator and physical task]
+    Assets[Original fixed five-bottle scene]
+    Host[Root: original ABC host\nCPU MuJoCo physics and MJWarp cameras]
+    Limits[Physical action limits\nNormalized action boundary]
+    Judge[Original instantaneous success judge\nTermination and timeout]
+    Assets -->|data: native assets| Host
+    Limits -->|control: 14 physical commands| Host
+    Host -->|data: physical state and result| Judge
+  end
+  subgraph Sadhana[Sadhana owns training and evaluation]
+    CLI[FastTD3 agent: bounded CLI\nNew isolated Python 3.10 prefix]
+    RPC[Explicit Unix RPC\nPrivileged qpos, qvel, scene metadata]
+    Author[Original FastTD3\nMLP actor and distributional critics]
+    Replay[Original GPU replay and normalization]
+    Export[Original checkpoint export\nNo exact resume claim]
+    Eval[Root: separate frozen evaluation\nExplicit matched seeds]
+    Receipt[Update counts, finite samples\nState fingerprints and receipts]
+    CLI -->|control: resolved original arguments| Author
+    Author -->|control: normalized 14D action| RPC
+    RPC -->|data: state and true terminal observation| Replay
+    Replay -->|data: original sampled batches| Author
+    Author -->|data: model and normalizers| Export
+    Export -->|data: fixed policy| Eval
+    Author -->|data: read-only measurements| Receipt
+    Eval -->|data: task evidence| Receipt
+  end
+  RPC -->|control: task-owned requests| Limits
+  Host -->|data: privileged observation| RPC
+  Eval -->|control: held-out reset and action| RPC
+  Judge -->|data: success and complete episode| RPC
+  Receipt --> Viewer[Root: benchmark viewer and coordination board]
+  Peer[Independent agent and OpenQodex\nSource and evidence review] -.->|review: separate from learner| Receipt
