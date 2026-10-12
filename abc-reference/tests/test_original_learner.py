@@ -109,6 +109,7 @@ class OriginalLearnerTests(unittest.TestCase):
                 args = BaseArgs(
                     num_envs=1, actor_hidden_dim=32, amp=amp, cuda=cuda,
                     amp_dtype=amp_dtype, obs_normalization=True, torch_deterministic=True,
+                    compile=False,
                 )
                 actor = Actor(20, 14, 1, args.init_scale, 32, device=torch.device("cpu"))
                 normalizer = EmpiricalNormalization(20, "cpu")
@@ -162,6 +163,39 @@ class OriginalLearnerTests(unittest.TestCase):
                     self.assertEqual(precision["float32_matmul_precision"], "high")
                     self.assertTrue(precision["cudnn_deterministic"])
                     self.assertEqual((receipt["actor_updates"], receipt["critic_updates"]), (0, 0))
+
+    def test_frozen_checkpoint_uses_actual_compiled_normalizer_without_updates(self):
+        args = BaseArgs(
+            num_envs=1, actor_hidden_dim=32, cuda=False, amp=True, compile=True,
+        )
+        actor = Actor(20, 14, 1, args.init_scale, 32, device=torch.device("cpu"))
+        normalizer = EmpiricalNormalization(20, "cpu")
+        normalizer(torch.arange(40, dtype=torch.float32).reshape(2, 20))
+        normalizer.eval()
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "policy.pt"
+            torch.save({
+                "args": asdict(args), "actor_state_dict": actor.state_dict(),
+                "obs_normalizer_state": normalizer.state_dict(),
+            }, checkpoint)
+            before = torch.random.get_rng_state().clone()
+            real_compile = torch.compile
+            with patch("torch.compile", wraps=real_compile) as compiled:
+                receipt = evaluate(
+                    checkpoint, SyntheticEnv(1), [9030], Path(directory) / "eval"
+                )
+            compiled.assert_called_once()
+            self.assertEqual(compiled.call_args.kwargs, {"mode": None})
+            self.assertEqual(compiled.call_args.args[0].__self__.count.item(), 2)
+            self.assertTrue(torch.equal(before, torch.random.get_rng_state()))
+            self.assertEqual(receipt["policy_state_before"], receipt["policy_state_after"])
+            self.assertEqual(receipt["rng_state_before"], receipt["rng_state_after"])
+            precision = receipt["evaluation_precision"]
+            self.assertTrue(precision["compiled_normalizer"])
+            self.assertIsNone(precision["normalizer_compile_mode"])
+            self.assertFalse(precision["actor_compiled"])
+            self.assertFalse(precision["autocast_enabled"])
+            self.assertEqual((receipt["actor_updates"], receipt["critic_updates"]), (0, 0))
 
     def test_terminal_distribution_projection_clamps_and_conserves_mass(self):
         critic = Critic(4, 2, 5, 0.0, 4.0, 32, "", 64, 8, device=torch.device("cpu"))

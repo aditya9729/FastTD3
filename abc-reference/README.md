@@ -45,7 +45,9 @@ policy state and policy RNG before and after evaluation. It uses the saved
 `amp`, `cuda` and `amp_dtype` settings with the author's evaluation autocast.
 The receipt records the actual autocast profile, parameter/action dtypes and
 original `high` float32 matrix multiplication precision. Original actions are
-converted to float32 before simulator dispatch. Missing or incomplete episode
+converted to float32 before simulator dispatch. When saved `compile` is true,
+the normalizer is compiled with `mode=None`, as in the author's nested evaluator.
+The actor stays eager in that original evaluation path. Missing or incomplete episode
 evidence fails evaluation; it does not become a zero score.
 
 The original checkpoint exports actor, critics, normalizers and arguments.

@@ -266,6 +266,9 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
     else:
         normalizer = torch.nn.Identity()
     normalizer.eval()
+    normalize_obs = (
+        torch.compile(normalizer.forward, mode=None) if args["compile"] else normalizer.forward
+    )
     if not all(
         torch.isfinite(tensor).all()
         for model in (actor, normalizer)
@@ -283,7 +286,7 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
             with torch.no_grad(), autocast(
                 device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
             ):
-                normalized = normalizer(obs, update=False) if args["obs_normalization"] else obs
+                normalized = normalize_obs(obs, update=False) if args["obs_normalization"] else obs
                 actions = actor(normalized)
             action_dtypes.add(str(actions.dtype))
             obs, rewards, dones, infos = env.step(actions.float())
@@ -328,6 +331,10 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
             "autocast_device_type": amp_device_type,
             "configured_amp": args["amp"],
             "configured_cuda": args["cuda"],
+            "configured_compile": args["compile"],
+            "compiled_normalizer": args["compile"],
+            "normalizer_compile_mode": None,
+            "actor_compiled": False,
             "amp_dtype": args["amp_dtype"],
             "autocast_dtype": str(amp_dtype),
             "policy_parameter_dtype": sorted({str(p.dtype) for p in actor.parameters()}),
