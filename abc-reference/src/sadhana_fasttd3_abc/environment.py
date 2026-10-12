@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+import time
 from pathlib import Path
 from typing import Any
 
@@ -15,11 +16,12 @@ class Endpoint:
     """One connection per request. State remains in the task-owned host."""
 
     def __init__(self, path: str | Path, *, timeout: float = 60.0) -> None:
-        if not 0 < timeout <= 600:
+        if type(timeout) not in (int, float) or not 0 < timeout <= 600:
             raise ValueError("RPC timeout must be positive and at most 600 seconds")
         self.path, self.timeout, self.request_id = str(path), timeout, 0
 
     def call(self, operation: str, **payload: Any) -> dict[str, Any]:
+        deadline = time.monotonic() + self.timeout
         self.request_id += 1
         body = (
             json.dumps(
@@ -31,18 +33,31 @@ class Endpoint:
         )
         if len(body) > MAX_FRAME_BYTES:
             raise ValueError("RPC request exceeds the 4 MiB frame limit")
+
+        def remaining() -> float:
+            seconds = deadline - time.monotonic()
+            if seconds <= 0:
+                raise TimeoutError("ABC RPC exceeded its total deadline")
+            return seconds
+
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-            connection.settimeout(self.timeout)
+            connection.settimeout(remaining())
             connection.connect(self.path)
+            connection.settimeout(remaining())
             connection.sendall(body)
             frame = bytearray()
-            while not frame.endswith(b"\n"):
+            while True:
+                connection.settimeout(remaining())
                 chunk = connection.recv(min(65536, MAX_FRAME_BYTES + 1 - len(frame)))
                 if not chunk:
                     raise RuntimeError("ABC host closed before a complete response")
                 frame.extend(chunk)
                 if len(frame) > MAX_FRAME_BYTES:
                     raise ValueError("RPC response exceeds the 4 MiB frame limit")
+                if b"\n" in frame:
+                    if frame.count(b"\n") != 1 or not frame.endswith(b"\n"):
+                        raise ValueError("ABC host must send one JSON frame per connection")
+                    break
         response = json.loads(frame)
         if not isinstance(response, dict) or response.get("schema") != SCHEMA:
             raise ValueError("ABC host response has an incompatible schema")
@@ -53,6 +68,7 @@ class Endpoint:
         result = response.get("result")
         if not isinstance(result, dict):
             raise ValueError("ABC host result must be an object")
+        remaining()
         return result
 
 

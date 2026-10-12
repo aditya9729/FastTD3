@@ -19,6 +19,8 @@ Root starts the original ABC host under the serial GPU 0 lease.
 The host supplies robot and object position, velocity and task state.
 It maps normalized `[-1,1]` actions to documented physical limits.
 It saves the final state before automatic episode reset.
+The client applies one total RPC deadline across connect, send and all response
+reads. A server cannot extend this deadline by sending small response fragments.
 
 ```sh
 python -I -u -m sadhana_fasttd3_abc.cli train \
