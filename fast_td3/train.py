@@ -50,7 +50,7 @@ except ImportError:
     pass
 
 
-def main(*, args=None, env_factory=None, observer=None, environment_type="abc"):
+def main(*, args=None, env_factory=None, observer=None, environment_type="abc", initial_observer=None):
     # Sadhana boundary: an explicit environment factory leaves author updates intact.
     args = get_args() if args is None else args
     print(args)
@@ -575,6 +575,19 @@ def main(*, args=None, env_factory=None, observer=None, environment_type="abc"):
         global_step = torch_checkpoint["global_step"]
     else:
         global_step = 0
+
+    if initial_observer is not None:
+        if args.checkpoint_path is not None or global_step != 0:
+            raise ValueError("Initial scratch export cannot use a resumed checkpoint")
+        initial_observer(
+            global_step=global_step,
+            actor=actor,
+            qnet=qnet,
+            qnet_target=qnet_target,
+            obs_normalizer=obs_normalizer,
+            critic_obs_normalizer=critic_obs_normalizer,
+            args=args,
+        )
 
     dones = None
     pbar = tqdm.tqdm(total=args.total_timesteps, initial=global_step)

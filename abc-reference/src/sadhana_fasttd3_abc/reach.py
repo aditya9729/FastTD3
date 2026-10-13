@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .environment import Endpoint, RemoteEnv
+from .initial_export import InitialExport
 from .learner import train, write_json
 from .reach_contract import HORIZON, PROFILE, REACH, STOPPING, validate_config
 from .vector import SCHEMA, VectorRemoteEnv
@@ -297,7 +298,8 @@ def train_reach(
         created.append(env)
         return env, env, env
 
-    receipt = train(args, factory, output)
+    capture = InitialExport(output.resolve() / "initial-scratch.pt")
+    receipt = train(args, factory, output, initial_observer=capture)
     if (
         len(created) != 1
         or created[0].monitor.decision is None
@@ -318,6 +320,7 @@ def train_reach(
         "declared_maximum_args": initial,
         "effective_final_args": asdict(args),
         "checkpoint": receipt["checkpoint"],
+        "initial_export": receipt["initial_export"],
         "actual_updates": receipt["actual_updates"],
         "stopping": env.monitor.evidence(),
         "episodes": env.episodes,

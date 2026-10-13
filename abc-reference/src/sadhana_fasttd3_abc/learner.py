@@ -115,7 +115,14 @@ def validate_args(args: Any) -> None:
         )
 
 
-def train(args: Any, env_factory: Any, output: Path, *, check_interval: int = 50) -> dict[str, Any]:
+def train(
+    args: Any,
+    env_factory: Any,
+    output: Path,
+    *,
+    check_interval: int = 50,
+    initial_observer: Any = None,
+) -> dict[str, Any]:
     """Call the normal installed original training module; do not copy its math."""
     validate_args(args)
     output = output.resolve()
@@ -153,7 +160,10 @@ def train(args: Any, env_factory: Any, output: Path, *, check_interval: int = 50
         from fast_td3.train import main
 
         os.chdir(output)
-        main(args=args, env_factory=tracked_factory, observer=observer)
+        initial_boundary = (
+            {"initial_observer": initial_observer} if initial_observer is not None else {}
+        )
+        main(args=args, env_factory=tracked_factory, observer=observer, **initial_boundary)
         checkpoint = output / "models" / f"{args.env_name}__{args.exp_name}__{args.seed}_final.pt"
         if not checkpoint.is_file() or not all(observer.counts.values()):
             raise RuntimeError(
@@ -186,6 +196,8 @@ def train(args: Any, env_factory: Any, output: Path, *, check_interval: int = 50
             env.close()
         receipt["seconds"] = time.monotonic() - start
         receipt.update(observer.evidence())
+        if initial_observer is not None:
+            receipt["initial_export"] = initial_observer.evidence
         if created:
             receipt["environment"] = getattr(created[0], "description", {"test_double": True})
             receipt["controls"] = getattr(created[0], "controls", None)
@@ -224,7 +236,9 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
     amp_device_type = (
         "cuda"
         if args["cuda"] and torch.cuda.is_available()
-        else "mps" if args["cuda"] and torch.backends.mps.is_available() else "cpu"
+        else "mps"
+        if args["cuda"] and torch.backends.mps.is_available()
+        else "cpu"
     )
     amp_dtype = torch.bfloat16 if args["amp_dtype"] == "bf16" else torch.float16
     torch.set_float32_matmul_precision("high")
@@ -276,6 +290,7 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
     ):
         raise ValueError("Checkpoint policy or normalization contains nonfinite tensors")
     frozen = state_digest(actor, normalizer)
+    components_before = {"actor": state_digest(actor), "normalizer": state_digest(normalizer)}
     start = time.monotonic()
     records = []
     action_dtypes = set()
@@ -283,8 +298,9 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
         obs = env.reset(seeds=[seed])
         reward_sum, final = 0.0, None
         for control in range(1, env.max_episode_steps + 1):
-            with torch.no_grad(), autocast(
-                device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled
+            with (
+                torch.no_grad(),
+                autocast(device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled),
             ):
                 normalized = normalize_obs(obs, update=False) if args["obs_normalization"] else obs
                 actions = actor(normalized)
@@ -307,6 +323,7 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
         records.append(final)
         write_json(output / f"episode-{seed}.json", final)
     after = state_digest(actor, normalizer)
+    components_after = {"actor": state_digest(actor), "normalizer": state_digest(normalizer)}
     if frozen != after:
         raise RuntimeError("Frozen evaluation mutated actor or observation normalization")
     rng_after = rng_state()
@@ -324,6 +341,10 @@ def evaluate(checkpoint: Path, env: Any, seeds: list[int], output: Path) -> dict
         "critic_updates": 0,
         "policy_state_before": frozen,
         "policy_state_after": after,
+        "policy_components_before": components_before,
+        "policy_components_after": components_after,
+        "action_selection": "original_Actor.forward_no_explore_no_added_noise",
+        "normalizer_update": False,
         "rng_state_before": rng_before,
         "rng_state_after": rng_after,
         "evaluation_precision": {

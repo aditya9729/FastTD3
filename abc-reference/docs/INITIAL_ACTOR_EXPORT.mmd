@@ -1,0 +1,29 @@
+flowchart LR
+  subgraph Fast[FastTD3 package: preparation agent]
+    Init[Original learner initialization]
+    Hook[Optional control-zero observer]
+    Save[Public save_params]
+    Learn[Original training loop and updates]
+    Frozen[Public frozen evaluate: Actor.forward]
+  end
+  Init --> Hook
+  Hook -->|Read-only export and RNG/state checks| Save
+  Hook --> Learn
+  Save --> Initial[Initial actor + normalizer]
+  Learn --> Final[Final actor + normalizer]
+  Initial --> Frozen
+  Final --> Frozen
+  subgraph ABC[ABC package: preparation agent]
+    Producer[Authenticate complete TRAIN producer]
+    Stage[Separate canonical paired stage]
+    Host[One camera-free native host]
+    Cases[Three pinned TRAIN MJB + full INTEGRATION states]
+  end
+  Producer --> Stage
+  Stage -.->|Control: owned process group and watchdogs| Host
+  Stage -.->|Control: frozen consumer| Frozen
+  Cases -->|Restore identical bytes for each pair| Host
+  Frozen <-->|State216 / normalized action14 / dense reward| Host
+  Host --> Native[Native five-bottle outcomes]
+  Frozen --> Reach[Matched reach comparison and unchanged hashes]
+  Root[Root: review, release, GPU0 lease, actual jobs] -.-> Stage

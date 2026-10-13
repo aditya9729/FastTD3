@@ -13,7 +13,7 @@
     "update_pol": "0542e3d80c2ba655a93c1bdfb0a9b26a7cc1e15306064b32e102cfd983faadc0",
     "soft_update": "471059da2bf3e0aebde9523a29c2e32c15ec945b613b8fd89cd5e3d2ef9945c9"
   },
-  "train_boundary_patch_sha256": "6cffbbb14d57ac00d3bef920dc32c68338fb64cf4212a83aa5b150c5fd6135cb",
+  "train_boundary_patch_sha256": "2854833ab7367db4fb3095c5239a866db314ce7da692c058b40d6a8cd352df52",
   "files": [
     {
       "path": "fast_td3/__init__.py",
@@ -67,7 +67,7 @@
     },
     {
       "path": "fast_td3/train.py",
-      "sha256": "5d60f3aaffd40453c253753c9213e20299a5f485f53e48ea8fb2cb73cc5cdfae",
+      "sha256": "5438f4aacc832db85685ad8771a24e944bdf8e044df18da24f595cf2954bbe99",
       "upstream_unchanged": false
     },
     {
@@ -92,5 +92,6 @@
     "abc",
     "humanoid_bench"
   ],
-  "humanoidbench_profile_owner": "Normally installed sadhana_fasttd3_hb stage owns exact h1hand-stand-v0 / 128 worlds / 64 vector steps admission; native learner qualification remains pending."
+  "humanoidbench_profile_owner": "Normally installed sadhana_fasttd3_hb stage owns exact h1hand-stand-v0 / 128 worlds / 64 vector steps admission; native learner qualification remains pending.",
+  "initial_export_boundary": "Optional initial_observer after original reset/global_step selection and before first loop; default absent; scratch only; public save_params; read-only state/mode/arg/RNG checks"
 }
