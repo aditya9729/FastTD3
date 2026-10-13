@@ -1,0 +1,18 @@
+flowchart LR
+    subgraph Parent[Parent: canonical stage and native execution]
+        G[CPU contract proof and live RAM admission] --> L[GPU0 lease and watchdog]
+        L --> H[ABC host:64 independent original MuJoCo worlds]
+    end
+    subgraph Boundary[Fast boundary: reduced-world campaign]
+        H -->|216 state / reward / terminal state / reset evidence| C[CampaignVectorRemoteEnv]
+        C -->|completed TRAIN episodes| M[TaskFutilityMonitor:64 equal rank weights]
+        M -->|finite natural exit request| A[Original args loop bound]
+    end
+    subgraph Author[Original FastTD3: unchanged learner]
+        C --> R[Original replay and normalization]
+        R --> U[Original two critic / one actor updates]
+        U -->|normalized absolute14 targets| H
+        A --> E[Original final policy export]
+    end
+    E --> V[Parent: complete frozen captured VAL evaluation]
+    V --> O[Future actual task results and video]

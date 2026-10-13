@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "profile": "reward_v2_training128",
+  "phase": "training",
+  "num_envs": 128,
+  "seed_base": 200000,
+  "seed_stride": 128,
+  "max_episode_steps": 3540,
+  "vector_steps": 42480,
+  "reward": {
+    "schema": "sadhana.abc.success-reward/v1",
+    "profile": "abc_full_success_pbrs_v1",
+    "base": "one_on_current_native_five_of_five_success_termination_else_zero",
+    "gamma": 0.99,
+    "potential_bound": 0.25,
+    "true_terminal_potential": 0.0,
+    "timeout_potential": "retain_native_final_before_autoreset",
+    "reward_clipping": false,
+    "geometry_frame": "world",
+    "geometry_units": "metres",
+    "reach_length_m": 0.15,
+    "clearance_margin_m": 0.01,
+    "clearance_length_m": 0.1,
+    "transport_length_m": 0.25,
+    "bin_opening_offset_m": 0.05,
+    "unsolved_weights": [
+      0.25,
+      0.25,
+      0.25
+    ],
+    "grasp_sites": [
+      "left_grasp_site",
+      "right_grasp_site"
+    ],
+    "bottle_names": [
+      "bottle_1",
+      "bottle_2",
+      "bottle_3",
+      "bottle_4",
+      "bottle_5"
+    ],
+    "native_judge_changed": false,
+    "grasp_or_contact_success_label": false,
+    "parameter_origin": "disclosed_initial_geometric_heuristics_no_VAL_tuning"
+  },
+  "campaign": {
+    "schema": "sadhana.fasttd3.abc.task-futility/v1",
+    "phase": "training",
+    "maximum_calls": 42480,
+    "minimum_calls": 21240,
+    "minimum_completed_episodes_per_rank": 6,
+    "window_calls": 3540,
+    "patience_windows": 3,
+    "improvement_thresholds": {
+      "success_rate": 0.0078125,
+      "final_bottles": 0.1,
+      "peak_bottles": 0.1,
+      "peak_phi": 0.005,
+      "peak_reach": 0.02,
+      "peak_clearance": 0.02,
+      "peak_lift_transport": 0.02
+    },
+    "rank_weighting": "equal_mean_of_per_rank_completed_episode_means",
+    "stop_scope": "training_task_futility_not_validation_convergence_or_overfit",
+    "validation_seeds_used_for_stopping": [],
+    "loss_based_stopping": false,
+    "checkpoint": "unchanged_author_final_export_after_natural_loop_exit"
+  },
+  "timeouts": {
+    "ready_s": 600,
+    "step_s": 180,
+    "shutdown_s": 30,
+    "wall_s": 12600,
+    "rpc_s": 180
+  }
+}

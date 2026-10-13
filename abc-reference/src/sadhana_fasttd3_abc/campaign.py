@@ -14,6 +14,8 @@ from .learner import train, write_json
 from .vector import SCHEMA, VectorRemoteEnv
 
 PROFILE = "reward_v2_training128"
+PROFILE64 = "reward_v2_training64"
+WORLD_COUNTS = {PROFILE: 128, PROFILE64: 64}
 PHASES = {"runtime_gate": 64, "training": 42480}
 THRESHOLDS = {
     "success_rate": 1 / 128,
@@ -24,6 +26,18 @@ THRESHOLDS = {
     "peak_clearance": 0.02,
     "peak_lift_transport": 0.02,
 }
+
+
+def world_count(config: dict) -> int:
+    """Admit the historical128 or explicitly declared reduced64 profile."""
+    profile = config.get("profile")
+    count = WORLD_COUNTS.get(profile) if type(profile) is str else None
+    if count is None:
+        raise ValueError("Use a declared reward-v2 training64 or training128 profile")
+    declared = config.get("num_envs", 128 if count == 128 else None)
+    if type(declared) is not int or declared != count:
+        raise ValueError("Campaign profile and explicit world count differ")
+    return count
 
 
 def campaign_spec(phase: str) -> dict:
@@ -49,7 +63,8 @@ def campaign_spec(phase: str) -> dict:
 def load_config(path: Path) -> dict:
     config = json.loads(path.read_text())
     phase = config.get("phase")
-    if phase not in PHASES or config.get("profile") != PROFILE:
+    world_count(config)
+    if phase not in PHASES:
         raise ValueError("Use a separate reward-v2 campaign phase")
     if (
         config.get("campaign") != campaign_spec(phase)
@@ -76,7 +91,7 @@ def campaign_args(config: dict, *, device: str = "cuda"):
         exp_name="FastTD3ABCRewardV2_" + config["phase"],
         seed=1,
         cuda=device == "cuda",
-        num_envs=128,
+        num_envs=world_count(config),
         num_eval_envs=1,
         total_timesteps=config["vector_steps"],
         use_wandb=False,
@@ -91,7 +106,8 @@ class TaskFutilityMonitor:
 
     def __init__(self, config: dict):
         self.config = config
-        self.counts = [0] * 128
+        self.num_envs = world_count(config)
+        self.counts = [0] * self.num_envs
         self.pending: list[dict] = []
         self.windows: list[dict] = []
         self.best: dict[str, float] = {}
@@ -118,7 +134,7 @@ class TaskFutilityMonitor:
             rank = episode.get("rank")
             if (
                 type(rank) is not int
-                or not 0 <= rank < 128
+                or not 0 <= rank < self.num_envs
                 or type(episode.get("episode_index")) is not int
                 or episode.get("episode_index") != self.counts[rank]
             ):
@@ -173,7 +189,7 @@ class TaskFutilityMonitor:
         if self.config["phase"] == "training" and controls % 3540 == 0:
             rows = [
                 [episode for episode in self.pending if episode["rank"] == rank]
-                for rank in range(128)
+                for rank in range(self.num_envs)
             ]
             complete = all(rows)
             window = {
@@ -189,7 +205,7 @@ class TaskFutilityMonitor:
                         math.fsum(self.episode_metrics(episode)[name] for episode in row) / len(row)
                         for row in rows
                     )
-                    / 128
+                    / self.num_envs
                     for name in THRESHOLDS
                 }
                 improvement = [
@@ -240,16 +256,19 @@ class CampaignVectorRemoteEnv(VectorRemoteEnv):
     """Retain original transitions; request only a natural finite loop exit."""
 
     def __init__(self, endpoint: Any, *, settings: Any, device: Any, config: dict):
+        count = world_count(config)
         RemoteEnv.__init__(self, endpoint, device=device, seed=200000)
         if (self.num_envs, self.num_obs, self.num_actions, self.max_episode_steps) != (
-            128,
+            count,
             216,
             14,
             3540,
         ):
-            raise ValueError("Campaign state216/actions14/worlds128/horizon3540 differ")
+            raise ValueError("Campaign state216/actions14/declared worlds/horizon3540 differ")
+        if settings.num_envs != count:
+            raise ValueError("Campaign learner and native world counts differ")
         for key, expected in (
-            ("profile", PROFILE),
+            ("profile", config["profile"]),
             ("reward", config["reward"]),
             ("campaign", config["campaign"]),
             ("carried_arm_reset", True),
@@ -332,6 +351,25 @@ def train_campaign(
         "actual_updates": receipt["actual_updates"],
         "resume_semantics": receipt["resume_semantics"],
     }
+    if env.num_envs == 64:
+        campaign["parallelism"] = {
+            "profile": PROFILE64,
+            "num_envs": 64,
+            "author_default_num_envs": 128,
+            "actual_rank_statistics_denominator": 64,
+            "maximum_transitions": config["vector_steps"] * 64,
+            "seed_bank_episode_stride": 128,
+            "replay_buffer_size_per_env": args.buffer_size,
+            "author_default_aggregate_replay_capacity": 128 * args.buffer_size,
+            "actual_aggregate_replay_capacity": 64 * args.buffer_size,
+            "critic_updates_per_vector_call": args.num_updates,
+            "author_default_critic_updates_per_collected_transition": args.num_updates / 128,
+            "actual_critic_updates_per_collected_transition": args.num_updates / 64,
+            "recipe_difference": (
+                "64 worlds halve aggregate replay capacity and double critic updates per collected "
+                "transition; original learner settings retained"
+            ),
+        }
     write_json(output / "campaign.json", campaign)
     return campaign
 
