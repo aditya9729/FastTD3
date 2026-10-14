@@ -91,7 +91,7 @@ def main(*, args=None, env_factory=None, observer=None, environment_type="abc", 
     print(f"Using device: {device}")
 
     if env_factory is not None:
-        if environment_type not in {"abc", "humanoid_bench"}:
+        if environment_type not in {"abc", "humanoid_bench", "leela_r1lite"}:
             raise ValueError("Unsupported explicit environment factory type")
         env_type = environment_type
         envs, eval_envs, render_env = env_factory(args, device)
@@ -376,7 +376,7 @@ def main(*, args=None, env_factory=None, observer=None, environment_type="abc", 
 
     def render_with_rollout():
         # Quick rollout for rendering
-        if env_type == "humanoid_bench":
+        if env_type in {"humanoid_bench", "leela_r1lite"}:
             obs = render_env.reset()
             renders = [render_env.render()]
         elif env_type in ["isaaclab", "mtbench"]:
@@ -397,7 +397,7 @@ def main(*, args=None, env_factory=None, observer=None, environment_type="abc", 
             if env_type == "mujoco_playground":
                 render_env.state.info["command"] = jnp.array([[1.0, 0.0, 0.0]])
             if i % 2 == 0:
-                if env_type == "humanoid_bench":
+                if env_type in {"humanoid_bench", "leela_r1lite"}:
                     renders.append(render_env.render())
                 else:
                     renders.append(render_env.state)
@@ -718,7 +718,7 @@ def main(*, args=None, env_factory=None, observer=None, environment_type="abc", 
                     if args.eval_interval > 0 and global_step % args.eval_interval == 0:
                         print(f"Evaluating at global step {global_step}")
                         eval_avg_return, eval_avg_length = evaluate()
-                        if env_type in ["humanoid_bench", "isaaclab", "mtbench"]:
+                        if env_type in ["humanoid_bench", "isaaclab", "mtbench", "leela_r1lite"]:
                             # NOTE: Hacky way of evaluating performance, but just works
                             obs = envs.reset()
                         logs["eval_avg_return"] = eval_avg_return
